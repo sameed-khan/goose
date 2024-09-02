@@ -1,8 +1,11 @@
 //! Traits and types for GUI navigation.
+use autopilot::bitmap::Bitmap;
 use autopilot::screen;
 use opencv::{
-    core::{min_max_loc, no_array, Mat, Point, Rect, Scalar, CV_8U},
+    core,
+    core::{min_max_loc, no_array, Mat, Point, Rect, CV_8UC3},
     imgcodecs, imgproc,
+    imgproc::match_template,
     prelude::*,
 };
 use std::error::Error;
@@ -11,6 +14,33 @@ use std::path::Path;
 use std::result::Result;
 
 use crate::errors::ScreenCoordinateError;
+
+/// Link between Bitmap and Mat types to allow for OpenCV template matching from autopilot screengrab
+/// Bitmaps.
+pub fn convert_bitmap_to_mat(screen: Bitmap) -> Mat {
+    let width = screen.size.width as i32;
+    let height = screen.size.height as i32;
+    let raw_pixels = screen.image.raw_pixels();
+
+    // Create a Mat from the raw pixels
+    let bgr_mat = unsafe {
+        Mat::new_rows_cols_with_data_unsafe(
+            height,
+            width,
+            CV_8UC3,
+            raw_pixels.as_ptr() as *mut std::ffi::c_void,
+            core::Mat_AUTO_STEP,
+        )
+        .expect("Failed to create Mat from raw pixels")
+    };
+
+    // Convert from RGB to BGR (OpenCV uses BGR by default)
+    let mut opencv_mat = Mat::default();
+    imgproc::cvt_color(&bgr_mat, &mut opencv_mat, imgproc::COLOR_RGB2BGR, 0)
+        .expect("Failed to convert color");
+
+    opencv_mat
+}
 
 /// Defines target location for cursor navigation.
 /// Encodes constraint that movement targets must be within the bounds of the screen.
@@ -67,6 +97,9 @@ pub trait LocationStrategy {
 /// cursor to specific elements and item on-screen.
 /// Users define a search region and capture an image of a specific GUI element to match on for cursor
 /// movement.
+/// Note: The search region is defined to provide specificity for multiple occurrence of the same
+/// GUI element on the screen. However, the algorithm performs best for matching when given the
+/// entire screen as the search region.
 #[derive(Debug)]
 pub struct ImageTemplate<'a> {
     pub name: String,                        // Name of the template
@@ -75,7 +108,17 @@ pub struct ImageTemplate<'a> {
 }
 
 impl<'a> ImageTemplate<'a> {
-    pub fn new(name: String, path: &Path, search_region: (i32, i32, i32, i32)) -> ImageTemplate {
+    pub fn new(
+        name: String,
+        path: &Path,
+        search_region: Option<(i32, i32, i32, i32)>,
+    ) -> ImageTemplate {
+        let search_region = search_region.unwrap_or((
+            0,
+            0,
+            screen::size().width as i32,
+            screen::size().height as i32,
+        ));
         ImageTemplate {
             name,
             path,
@@ -91,34 +134,38 @@ impl<'a> LocationStrategy for ImageTemplate<'a> {
 
         // Create a region of interest (ROI) from the screenshot
         let roi = Mat::roi(screenshot, search_region)?;
-
         let template = imgcodecs::imread(
             self.path.to_str().unwrap(),
             imgcodecs::ImreadModes::IMREAD_COLOR.into(),
         )?;
 
         let mut match_result = Mat::default();
-        imgproc::match_template(
+        match_template(
             &roi,
             &template,
             &mut match_result,
             imgproc::TM_CCOEFF_NORMED,
-            &Mat::default(),
+            &no_array(),
         )?;
 
         let mut match_location = Point::default();
-        opencv::core::min_max_loc(
+        min_max_loc(
             &match_result,
             None,
             None,
             None,
             Some(&mut match_location),
-            &Mat::default(),
+            &no_array(),
         )?;
 
         // Calculate the absolute coordinates
-        let absolute_x = x + match_location.x;
-        let absolute_y = y + match_location.y;
+        let template_width = template.size()?.width;
+        let template_height = template.size()?.height;
+
+        // // Template match seems to return the top left corner of the match
+        // // so add half the width and height to get the center
+        let absolute_x = x + match_location.x + template_width / 2;
+        let absolute_y = y + match_location.y + template_height / 2;
 
         let result = ScreenCoordinates::new(absolute_x, absolute_y)?;
 
