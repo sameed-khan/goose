@@ -1,4 +1,5 @@
-![Angry Goose](assets/goose_logo.webp)
+<!-- ![Angry Goose](assets/goose_logo.webp) -->
+<img src="assets/goose_logo.webp" width="40%">
 
 # Goose
 Goose is a scripting application designed to allow clinicians and researchers easy automation of common clinical GUI interfaces, such as Epic, Sectra, and others.
