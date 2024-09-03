@@ -16,14 +16,15 @@ struct Click<L: LocationStrategy> {
     target: L,
     button: Button,
     check_radius: u16,
+    check_zone: Option<Rect>,
 }
-
 impl<L: LocationStrategy> Click<L> {
-    pub fn new(target: L, button: Button, check_radius: u16) -> Self {
+    pub fn new(target: L, button: Button, check_radius: u16, check_zone: Option<Rect>) -> Self {
         Click {
             target,
             button,
             check_radius,
+            check_zone,
         }
     }
 }
@@ -45,17 +46,24 @@ impl<L: LocationStrategy> GuiAction for Click<L> {
 }
 
 impl<L: LocationStrategy> GuiVerb for Click<L> {
+    /// For click, check zone is `check_radius` pixels around the cursor location
+    /// or a custom zone if provided.
     fn get_check_zone(&self) -> Rect {
-        let cursor_location = mouse::location();
-        let rect_origin = Point::new(
-            cursor_location.x - self.check_radius as f64,
-            cursor_location.y - self.check_radius as f64,
-        );
-        let rect_size = Size::new(
-            (self.check_radius * 2) as f64,
-            (self.check_radius * 2) as f64,
-        );
-        Rect::new(rect_origin, rect_size)
+        match self.check_zone {
+            Some(rect) => rect,
+            None => {
+                let cursor_location = mouse::location();
+                let rect_origin = Point::new(
+                    cursor_location.x - self.check_radius as f64,
+                    cursor_location.y - self.check_radius as f64,
+                );
+                let rect_size = Size::new(
+                    (self.check_radius * 2) as f64,
+                    (self.check_radius * 2) as f64,
+                );
+                Rect::new(rect_origin, rect_size)
+            }
+        }
     }
 
     fn fire(&self, wait_duration: Option<u64>, timeout: Option<u64>) -> Result<(), Box<dyn Error>> {
@@ -113,7 +121,7 @@ mod tests {
     fn click_by_coordinates() {
         setup();
 
-        let click = Click::new(AbsoluteLocation { x: 1890, y: 10 }, Button::Left, 50);
+        let click = Click::new(AbsoluteLocation { x: 1890, y: 10 }, Button::Left, 50, None);
 
         if let Err(e) = click.fire(None, None) {
             println!("Error: {}", e);
@@ -135,6 +143,7 @@ mod tests {
             ),
             Button::Left,
             50,
+            None,
         );
 
         if let Err(e) = click.fire(None, None) {
@@ -148,7 +157,7 @@ mod tests {
     #[test]
     fn no_ui_change_after_click_should_error() {
         setup();
-        let click = Click::new(AbsoluteLocation { x: 500, y: 500 }, Button::Left, 50);
+        let click = Click::new(AbsoluteLocation { x: 500, y: 500 }, Button::Left, 50, None);
 
         let click_err = click.fire(None, None).unwrap_err();
         let downcast_err = click_err.downcast_ref::<UIActionTimeOutError>();
