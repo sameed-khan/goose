@@ -17,7 +17,7 @@ use crate::errors::ScreenCoordinateError;
 
 /// Link between Bitmap and Mat types to allow for OpenCV template matching from autopilot screengrab
 /// Bitmaps.
-pub fn convert_bitmap_to_mat(screen: Bitmap) -> Mat {
+pub fn convert_bitmap_to_mat(screen: &Bitmap) -> Mat {
     let width = screen.size.width as i32;
     let height = screen.size.height as i32;
     let raw_pixels = screen.image.raw_pixels();
@@ -90,7 +90,7 @@ impl From<ScreenCoordinates> for autopilot::geometry::Point {
 }
 
 pub trait LocationStrategy {
-    fn get_location(&self, screenshot: &Mat) -> Result<ScreenCoordinates, Box<dyn Error>>;
+    fn get_location(&self, screenshot: &Bitmap) -> Result<ScreenCoordinates, Box<dyn Error>>;
 }
 
 /// A simple struct to hold information about an image template, used as a basis for navigating the
@@ -128,12 +128,13 @@ impl<'a> ImageTemplate<'a> {
 }
 
 impl<'a> LocationStrategy for ImageTemplate<'a> {
-    fn get_location(&self, screenshot: &Mat) -> Result<ScreenCoordinates, Box<dyn Error>> {
+    fn get_location(&self, screenshot_bmp: &Bitmap) -> Result<ScreenCoordinates, Box<dyn Error>> {
         let (x, y, width, height) = self.search_region;
         let search_region = Rect::new(x, y, width, height);
 
+        let screenshot = convert_bitmap_to_mat(screenshot_bmp);
         // Create a region of interest (ROI) from the screenshot
-        let roi = Mat::roi(screenshot, search_region)?;
+        let roi = Mat::roi(&screenshot, search_region)?;
         let template = imgcodecs::imread(
             self.path.to_str().unwrap(),
             imgcodecs::ImreadModes::IMREAD_COLOR.into(),
@@ -180,7 +181,7 @@ pub struct AbsoluteLocation {
 }
 
 impl LocationStrategy for AbsoluteLocation {
-    fn get_location(&self, _screenshot: &Mat) -> Result<ScreenCoordinates, Box<dyn Error>> {
+    fn get_location(&self, _screenshot: &Bitmap) -> Result<ScreenCoordinates, Box<dyn Error>> {
         Ok(ScreenCoordinates::new(self.x, self.y)?)
     }
 }

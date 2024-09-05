@@ -34,8 +34,7 @@ impl<L: LocationStrategy> CheckUIState for Click<L> {}
 impl<L: LocationStrategy> GuiAction for Click<L> {
     fn execute(&self) -> Result<Bitmap, Box<dyn Error>> {
         let tmp = self.get_screenshot()?;
-        let tmp_mat = convert_bitmap_to_mat(tmp);
-        let location: Point = (self.target.get_location(&tmp_mat)?).into();
+        let location: Point = (self.target.get_location(&tmp)?).into();
 
         mouse::move_to(location)?;
         let screenshot = self.get_screenshot()?; // Take a screenshot after moving the mouse
