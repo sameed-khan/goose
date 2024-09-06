@@ -8,8 +8,10 @@ use opencv::{
     imgproc::match_template,
     prelude::*,
 };
+use std::cmp::min;
 use std::error::Error;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::path::Path;
 use std::result::Result;
 
@@ -45,8 +47,15 @@ pub fn convert_bitmap_to_mat(screen: &Bitmap) -> Mat {
 /// Defines target location for cursor navigation.
 /// Encodes constraint that movement targets must be within the bounds of the screen.
 pub struct ScreenCoordinates {
-    pub x: u16,
-    pub y: u16,
+    pub point: Point,
+}
+
+pub enum PointAsRectAnchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Center,
 }
 
 impl ScreenCoordinates {
@@ -71,12 +80,73 @@ impl ScreenCoordinates {
         if x > width || y > height {
             return Err(ScreenCoordinateError {
                 message: format!(
-                    "Screen coordinate out of bounds: x: {}, y: {}, width: {}, height: {}",
+                    "Screen coordinate out of bounds: x: {}, y: {}, screen width: {}, screen height: {}",
                     x, y, width, height
                 ),
             });
         }
-        Ok(ScreenCoordinates { x, y })
+        Ok(ScreenCoordinates {
+            point: Point::new(x as i32, y as i32),
+        })
+    }
+
+    /// Generate a rectangle with the screen coordinates as an anchor point. Respects screen bounds.
+    /// Sides of the rectangle will be truncated if they exceed the screen boundaries.
+    /// Parameters:
+    /// * `width`: The width of the rectangle.
+    /// * `height`: The height of the rectangle.
+    /// * `anchor`: Which anchor point of the rectangle this object represents, can be one of the four points or the center.
+    pub fn generate_rect(
+        &self,
+        width: u64,
+        height: u64,
+        anchor: PointAsRectAnchor,
+    ) -> autopilot::geometry::Rect {
+        let (x, y, width, height) = (
+            self.point.x as i32,
+            self.point.y as i32,
+            width as i32,
+            height as i32,
+        );
+        let (max_width, max_height) = (screen::size().width as i32, screen::size().height as i32);
+
+        let (rx, ry, rw, rh) = match anchor {
+            PointAsRectAnchor::TopLeft => {
+                (x, y, min(width, max_width - x), min(height, max_height - y))
+            }
+            PointAsRectAnchor::TopRight => {
+                let rw = min(width, x);
+                let rh = min(height, max_height - y);
+                (x - rw, y, rw, rh)
+            }
+            PointAsRectAnchor::BottomLeft => {
+                let rw = min(width, max_width - x);
+                let rh = min(height, y);
+                (x, y - rh, rw, rh)
+            }
+            PointAsRectAnchor::BottomRight => {
+                let rw = min(width, x);
+                let rh = min(height, y);
+                (x - rw, y - rh, rw, rh)
+            }
+            PointAsRectAnchor::Center => {
+                let rw = min(width, min(x, max_width - x));
+                let rh = min(height, min(y, max_height - y));
+                (x - rw / 2, y - rh / 2, rw, rh)
+            }
+        };
+        autopilot::geometry::Rect::new(
+            autopilot::geometry::Point::new(rx as f64, ry as f64),
+            autopilot::geometry::Size::new(rw as f64, rh as f64),
+        )
+    }
+}
+
+impl Deref for ScreenCoordinates {
+    type Target = Point;
+
+    fn deref(&self) -> &Self::Target {
+        &self.point
     }
 }
 
@@ -163,8 +233,8 @@ impl<'a> LocationStrategy for ImageTemplate<'a> {
         let template_width = template.size()?.width;
         let template_height = template.size()?.height;
 
-        // // Template match seems to return the top left corner of the match
-        // // so add half the width and height to get the center
+        // Template match seems to return the top left corner of the match
+        // so add half the width and height to get the center
         let absolute_x = x + match_location.x + template_width / 2;
         let absolute_y = y + match_location.y + template_height / 2;
 
