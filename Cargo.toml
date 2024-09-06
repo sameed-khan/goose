@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-autopilot = "0.4.0"
+autopilot = { git = "https://github.com/autopilot-rs/autopilot-rs"}
 opencv = "0.92.2"
