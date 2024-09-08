@@ -5,4 +5,9 @@ edition = "2021"
 
 [dependencies]
 autopilot = { git = "https://github.com/autopilot-rs/autopilot-rs"}
+image = "0.22.5"
 opencv = "0.92.2"
+uuid = { version = "1.10.0", features = ["v4"]}
+
+[dev-dependencies]
+rand = "0.8.5"
