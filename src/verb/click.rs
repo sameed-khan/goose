@@ -1,89 +1,72 @@
 use crate::errors::UIActionTimeOutError;
-use crate::nav::location::convert_bitmap_to_mat;
-use crate::nav::location::LocationStrategy;
+use crate::nav::coordinate::PointAsRectAnchor;
+use crate::nav::coordinate::ScreenCoordinates;
+use crate::nav::coordinate::ScreenRect;
+use crate::nav::location::{GetLocation, TargetFactory};
+use crate::nav::strategy::{LocationStrategy, LocationStrategyType};
 use crate::verb::action::{CheckUIState, GuiAction, GuiVerb};
-use autopilot::bitmap::Bitmap;
-use autopilot::{
-    geometry::{Point, Rect, Size},
-    mouse,
-    mouse::Button,
-};
+use autopilot::bitmap::{self, Bitmap};
+use autopilot::geometry::Point;
+use autopilot::{mouse, mouse::Button};
+use image::GenericImageView;
+use opencv::prelude::*;
 use std::error::Error;
-use std::{thread, time};
+use std::time::{Duration, Instant};
 
 /// Clicks the mouse at the given location.
-struct Click<L: LocationStrategy> {
-    target: L,
+struct Click {
+    target: ScreenCoordinates,
     button: Button,
-    check_radius: u16,
-    check_zone: Option<Rect>,
+    check_zone: ScreenRect,
 }
-impl<L: LocationStrategy> Click<L> {
-    pub fn new(target: L, button: Button, check_radius: u16, check_zone: Option<Rect>) -> Self {
+impl Click {
+    pub fn new(
+        target_factory: TargetFactory,
+        button: Button,
+        check_zone: Option<ScreenRect>,
+    ) -> Self {
+        let screenshot = bitmap::capture_screen().expect("Unable to capture screen");
+        let target = target_factory.get_location();
+        let check_zone = check_zone.unwrap_or_else(|| match &target_factory {
+            TargetFactory::AbsoluteTarget(_) => {
+                target.generate_rect(150, 150, PointAsRectAnchor::Center)
+            }
+            TargetFactory::TemplateTarget(template) => {
+                let (width, height) = (
+                    template.image.width() as f64,
+                    template.image.height() as f64,
+                );
+                ScreenRect::new(target.x, target.y, width, height)
+            }
+        });
         Click {
             target,
             button,
-            check_radius,
             check_zone,
         }
     }
 }
 
-impl<L: LocationStrategy> CheckUIState for Click<L> {}
+impl CheckUIState for Click {}
 
-impl<L: LocationStrategy> GuiAction for Click<L> {
+impl GuiAction for Click {
     fn execute(&self) -> Result<Bitmap, Box<dyn Error>> {
-        let tmp = self.get_screenshot()?;
-        let location: Point = (self.target.get_location(&tmp)?).into();
+        let location: Point = self.target.into();
 
         mouse::move_to(location)?;
-        let screenshot = self.get_screenshot()?; // Take a screenshot after moving the mouse
-        println!("Screenshot captured after moving the mouse");
+        let screenshot = bitmap::capture_screen_portion(self.check_zone.into())?;
         mouse::click(self.button, None);
         Ok(screenshot)
     }
 }
 
-impl<L: LocationStrategy> GuiVerb for Click<L> {
-    /// For click, check zone is `check_radius` pixels around the cursor location
-    /// or a custom zone if provided.
-    fn get_check_zone(&self) -> Rect {
-        match self.check_zone {
-            Some(rect) => rect,
-            None => {
-                let cursor_location = mouse::location();
-                let rect_origin = Point::new(
-                    cursor_location.x - self.check_radius as f64,
-                    cursor_location.y - self.check_radius as f64,
-                );
-                let rect_size = Size::new(
-                    (self.check_radius * 2) as f64,
-                    (self.check_radius * 2) as f64,
-                );
-                Rect::new(rect_origin, rect_size)
-            }
-        }
-    }
-
-    fn fire(&self, wait_duration: Option<u64>, timeout: Option<u64>) -> Result<(), Box<dyn Error>> {
-        let mut timeout = timeout.unwrap_or(1000);
-        let wait_duration = wait_duration.unwrap_or(100);
-
+impl GuiVerb for Click {
+    fn fire(&self, timeout: Option<u64>) -> Result<(), Box<dyn Error>> {
+        let timeout = timeout.unwrap_or(500);
+        self.check_ui_state(timeout, true, None, Some(self.check_zone))?;
         let before = self.execute()?;
-        let mut after;
 
-        while timeout > 0 {
-            thread::sleep(time::Duration::from_millis(wait_duration));
-            after = self.get_screenshot()?;
-            if self.changed_ui_state(&before, &mut after, Some(self.get_check_zone()))? {
-                return Ok(());
-            }
-            timeout -= 100;
-        }
-
-        return Err(Box::new(UIActionTimeOutError {
-            message: "UI action timed out".to_string(),
-        }));
+        return self.check_ui_state(timeout, false, Some(before), Some(self.check_zone));
     }
 }
 
@@ -92,7 +75,9 @@ impl<L: LocationStrategy> GuiVerb for Click<L> {
 mod tests {
     use super::*;
     use crate::errors::UIActionTimeOutError;
+    use crate::nav::coordinate::Coordinate;
     use crate::nav::location::{AbsoluteLocation, ImageTemplate};
+    use std::path::Path;
     use std::process::Command;
     use std::{thread, time};
 
@@ -120,9 +105,16 @@ mod tests {
     fn click_by_coordinates() {
         setup();
 
-        let click = Click::new(AbsoluteLocation { x: 1890, y: 10 }, Button::Left, 50, None);
+        let click = Click::new(
+            TargetFactory::AbsoluteTarget(AbsoluteLocation {
+                x: Coordinate::new(1890),
+                y: Coordinate::new(10),
+            }),
+            Button::Left,
+            None,
+        );
 
-        if let Err(e) = click.fire(None, None) {
+        if let Err(e) = click.fire(None) {
             println!("Error: {}", e);
             teardown()
         }
@@ -135,17 +127,17 @@ mod tests {
         setup();
 
         let click = Click::new(
-            ImageTemplate::new(
+            TargetFactory::TemplateTarget(ImageTemplate::new(
                 "notepad_close_button".to_string(),
-                std::path::Path::new("fixtures/notepad_close_button.png"),
+                Path::new("fixtures/notepad_close_button.png"),
                 None,
-            ),
+                LocationStrategyType::TemplateMatching,
+            )),
             Button::Left,
-            50,
             None,
         );
 
-        if let Err(e) = click.fire(None, None) {
+        if let Err(e) = click.fire(None) {
             println!("Error: {}", e);
             teardown()
         }
@@ -156,9 +148,16 @@ mod tests {
     #[test]
     fn no_ui_change_after_click_should_error() {
         setup();
-        let click = Click::new(AbsoluteLocation { x: 500, y: 500 }, Button::Left, 50, None);
+        let click = Click::new(
+            TargetFactory::AbsoluteTarget(AbsoluteLocation {
+                x: Coordinate::new(500),
+                y: Coordinate::new(500),
+            }),
+            Button::Left,
+            None,
+        );
 
-        let click_err = click.fire(None, None).unwrap_err();
+        let click_err = click.fire(None).unwrap_err();
         let downcast_err = click_err.downcast_ref::<UIActionTimeOutError>();
         assert!(downcast_err.is_some());
 

@@ -1,8 +1,10 @@
-use crate::errors::OutOfBoundsError;
-use autopilot::bitmap::capture_screen;
+use crate::errors::{OutOfBoundsError, UIActionTimeOutError};
+use crate::nav::coordinate::ScreenRect;
+use autopilot::bitmap;
 use autopilot::bitmap::Bitmap;
-use autopilot::geometry::Rect;
+use autopilot::geometry::{Point, Rect};
 use std::error::Error;
+use std::time::{Duration, Instant};
 
 /// Defines the behavior of a GUI verb.
 pub trait GuiAction {
@@ -13,39 +15,65 @@ pub trait GuiAction {
     fn execute(&self) -> Result<Bitmap, Box<dyn Error>>;
 }
 
-/// Checks whether implementing type changed the UI state.
-/// All GUI verbs are composed of a series of actions that change the UI state.
-/// The next verb executed will await a UI state change before proceeding.
-/// All GUI verbs must implement this trait, which compares a screenshot before and after verb execution.
+/// Inspects / polls against current UI state
+/// Checks whether UI state has achieved a 'desired state'.
+/// This could be either a lack of change in UI state (i.e: check all is stable before proceeding with GuiVerb action)
+/// or a change in UI state (i.e: check that the UI state has changed as expected after GuiVerb action).
+/// Parameters:
+/// * `timeout`: The maximum time ms to wait for the UI state to achieve desired state
+/// * `is_same`: Boolean representing whether the UI state should be the same or different from the `before` screenshot.
+/// * `before`: Optional. A screenshot to compare current UI state against. If not provided, a screenshot will be taken.
+/// * `roi`: Optional. Region of interest to check for UI state change. Default is the entire screen.
+/// Returns:
+/// * `Ok(())` if the UI state has achieved the desired state. Errors on timeout.
 pub trait CheckUIState {
-    fn get_screenshot(&self) -> Result<Bitmap, Box<dyn Error>> {
-        let screen = capture_screen()?;
-        Ok(screen)
-    }
-    fn changed_ui_state(
+    fn check_ui_state(
         &self,
-        before: &Bitmap,
-        after: &Bitmap,
-        roi: Option<Rect>,
-    ) -> Result<bool, Box<dyn Error>> {
-        println!("Checking UI state change inside function...");
-        let (compare_before, compare_after) = if let Some(roi) = roi {
-            // Validate ROI dimensions
-            if !before.bounds().is_rect_visible(roi) {
-                return Err(Box::new(OutOfBoundsError {
-                    message: format!("ROI dimensions are larger than the screen: {:?}", roi.size),
-                }));
+        timeout: u64,
+        is_same: bool,
+        before: Option<Bitmap>,
+        roi: Option<ScreenRect>,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut timeout_duration = Duration::from_millis(timeout);
+        let before = before.unwrap_or(bitmap::capture_screen()?);
+        let roi = roi.unwrap_or(ScreenRect::default());
+
+        // Validate ROI dimensions
+        if !before.bounds().is_rect_visible(roi.rect) {
+            return Err(Box::new(OutOfBoundsError {
+                message: format!(
+                    "ROI dimensions: {:?} are larger than the screenshot input: {:?}",
+                    roi.rect.size,
+                    before.bounds()
+                ),
+            }));
+        }
+
+        while timeout_duration > Duration::from_millis(0) {
+            let start = Instant::now();
+
+            let mut after = bitmap::capture_screen()?;
+
+            let (before_roi, after_roi) = (
+                before.clone().cropped(roi.rect)?, // TODO: reconsider for efficiency
+                after.cropped(roi.rect)?,
+            );
+
+            if before_roi.bitmap_eq(&after_roi, Some(0.1)) == is_same {
+                return Ok(());
             }
 
-            // Extract ROI from before and after
-            (
-                before.clone().cropped(roi)?, // TODO: reconsider for efficiency
-                after.clone().cropped(roi)?,
-            )
-        } else {
-            (before.clone(), after.clone())
-        };
-        Ok(!compare_before.bitmap_eq(&compare_after, Some(0.1)))
+            let elapsed = start.elapsed();
+            timeout_duration = timeout_duration
+                .checked_sub(elapsed)
+                .unwrap_or_else(|| Duration::from_millis(0));
+        }
+        return Err(Box::new(UIActionTimeOutError {
+            message: format!(
+                "UI action timed out after {}ms; is_same: {}",
+                timeout, is_same
+            ),
+        }));
     }
 }
 
@@ -58,6 +86,5 @@ pub trait GuiVerb: GuiAction + CheckUIState {
     /// * `wait_duration`: Optional. The time in ms to wait between checking the UI state. Default is 100ms.
     /// * `check_zone`: Optional. The region of interest to check for UI state change. Default is the entire screen.
     /// Passing a `check_zone` is highly recommended since it is likely something unrelated to the action is happening elsewhere on the screen.
-    fn fire(&self, timeout: Option<u64>, wait_duration: Option<u64>) -> Result<(), Box<dyn Error>>;
-    fn get_check_zone(&self) -> Rect;
+    fn fire(&self, timeout: Option<u64>) -> Result<(), Box<dyn Error>>;
 }
