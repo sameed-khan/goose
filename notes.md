@@ -19,10 +19,12 @@ They are defined as a unit of action *that changes UI state*.<br>
   - [ ] Iterative Scroll: scrolling to move through a list and repeat an action on each element; ends scroll after the list no longer moves forward
   - [ ] Seek Scroll: scrolling to make a certain element appear
 - `Input` - finds a textbox and inserts some text
-  - [ ] Normal Input: exactly as above
-  - [ ] Submit Input: exactly as above *and then press \<Enter\>*
+  - [x] Normal Input: exactly as above
+  - [x] Submit Input: exactly as above *and then press \<Enter\>*
 - `Hover` - Mouses over a zone and then waits for an *expected* state change in a specific search region
   - [ ] hover
+- `Copy` - Copies a text area
+- `Paste` - Pastes into another text area
 - `Check` - read something on a region of the screen and then evaluate against some condition
   - Need to elaborate more here about the level of expressivity people can have for condition checking and evaluation
   - Here is also where AI LLM engine could enable more sophisticated analysis of text
@@ -40,6 +42,9 @@ They are defined as a unit of action *that changes UI state*.<br>
   - This would be something that can capture the *general structure* of a GUI element that contains
   text but is invariant to whatever text is actually contained inside the element.
   OCR could then be deployed to match against actual text content and then select a specific element.
+  - You can create some kind of a semantic GUI structure by doing edge filtering with Canny and then grouping connected components.
+  If one component is *contained* inside another component then it can be regarded as a child in the hierarchy. 
+    - See [Screen Parsing](https://arxiv.org/abs/2109.08763) -- paper that uses `Faster-RCNN` to construct semantic hierarchies of mobile application GUIs
 
 - Current state of table AI models for interpreting tables?
 - How are different interpretation backends structured and integrated?
