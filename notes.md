@@ -17,17 +17,38 @@ They are defined as a unit of action *that changes UI state*.<br>
   - [x] Option for user to provide custom `check_zone`
 - `Scroll` - scrolls an interface
   - [ ] Iterative Scroll: scrolling to move through a list and repeat an action on each element; ends scroll after the list no longer moves forward
+    - Define viewport on screen to watch for scroll (absolute coordinates; draw bbox)
+      - Bbox needs to be "sticky" -- bound to image or whatever exists at that point, so resistant
+      to being moved
+    - When there is no difference between last scroll and this scroll
+    - Continue scrolling; watch for update and update difference
+    - When update stops, then stop scrolling
+    - **Consider**: What is this component's API? It is not a `GUIVerb` -- what do other things 
+    need to get from it?
   - [ ] Seek Scroll: scrolling to make a certain element appear
 - `Input` - finds a textbox and inserts some text
   - [x] Normal Input: exactly as above
   - [x] Submit Input: exactly as above *and then press \<Enter\>*
 - `Hover` - Mouses over a zone and then waits for an *expected* state change in a specific search region
   - [ ] hover
-- `Copy` - Copies a text area
+- [ ]`Copy` - Copies a text area
+  - Drag from one point to another within visible area
+  - Scroll down through text frame to copy all text by keeping cursor at bottom edge of frame
 - `Paste` - Pastes into another text area
 - `Check` - read something on a region of the screen and then evaluate against some condition
   - Need to elaborate more here about the level of expressivity people can have for condition checking and evaluation
   - Here is also where AI LLM engine could enable more sophisticated analysis of text
+  
+### Semantics
+These are structures / constructs that do things like `if` statements, `loop`, parse information, and
+so on.
+- [ ] `Table` - interface for repeated actions over a set of rows
+  - User Input: bounding box of table area and on-screen line drawing to define first row and column
+    - QoL: repeat rows every `y` units and columns every `x` units to get structure of table
+  - Use OCR to extract text of table and read in information
+  - Select elements based on position in table
+  - Also specify elements to click based on raw points (does not work if scrolling is needed)
+  - These are all specified as "objects" of a for verb or something like that
 
 ### GUI
 **Implementation Checklist**
