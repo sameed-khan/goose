@@ -52,9 +52,9 @@ so on.
 
 ### GUI
 **Implementation Checklist**
+- [ ] Basic navbar and interface structure
 - [ ] Click and drag interface for defining zones to capture text
 - [ ] QoL: Mouse coordinates around cursor
-- [ ] Transparent overlay over screen
 - [ ] QoL: Ruler to measure pixel distances on-screen
 
 
@@ -70,3 +70,22 @@ so on.
 - Current state of table AI models for interpreting tables?
 - How are different interpretation backends structured and integrated?
 - Goose extensions API? how will that work?
+
+### Implementation Timeline
+**Deadline: 10/18**
+
+**9/20 - 9/22**
+- GUI
+
+**9/23 - 9/29**
+- Finish remaining GUI verbs
+
+**9/30 - 10/6**
+- DSL implementation
+
+**10/7 - 10/13**
+- Generate sectra program
+- Complete slides on RSNA presentation
+
+**10/14 - 10/18**
+- Testing and deployment
