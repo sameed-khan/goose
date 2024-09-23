@@ -5,9 +5,15 @@ edition = "2021"
 
 [dependencies]
 autopilot = { git = "https://github.com/autopilot-rs/autopilot-rs"}
+eframe = "0.28.1"
+egui = "0.28.1"
+egui_wgpu_backend = "0.30.0"
+egui_winit_platform = "0.23.0"
 image = "0.22.5"
 opencv = "0.92.2"
 uuid = { version = "1.10.0", features = ["v4"]}
+wgpu = "22.1.0"
+winit = "0.30.5"
 
 [dev-dependencies]
 rand = "0.8.5"
