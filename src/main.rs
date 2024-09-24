@@ -19,11 +19,12 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_decorations(false),
-        //         .with_inner_size([800.0, 600.0])
-        //         .with_transparent(true)
-        //         .with_mouse_passthrough(true)
-        //         .with_always_on_top()
+        viewport: egui::ViewportBuilder::default()
+            .with_title("Test App")
+            .with_inner_size([800.0, 600.0])
+            .with_transparent(true)
+            .with_always_on_top()
+            .with_mouse_passthrough(true),
         ..Default::default()
     };
     eframe::run_native(
