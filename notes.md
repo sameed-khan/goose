@@ -72,20 +72,23 @@ so on.
 - Goose extensions API? how will that work?
 
 ### Implementation Timeline
-**Deadline: 10/18**
+**Deadline: 10/26**
 
 **9/20 - 9/22**
 - GUI
 
 **9/23 - 9/29**
-- Finish remaining GUI verbs
+- GUI
 
 **9/30 - 10/6**
-- DSL implementation
+- Finish remaining GUI verbs
 
 **10/7 - 10/13**
+- DSL implementation
+
+**10/14 - 10/18**
 - Generate sectra program
 - Complete slides on RSNA presentation
 
-**10/14 - 10/18**
+**10/19 - 10/26**
 - Testing and deployment
