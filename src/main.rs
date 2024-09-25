@@ -21,10 +21,11 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Test App")
-            .with_inner_size([800.0, 600.0])
+            .with_decorations(true)
             .with_transparent(true)
             .with_always_on_top()
-            .with_mouse_passthrough(true),
+            .with_mouse_passthrough(true)
+            .with_maximized(true),
         ..Default::default()
     };
     eframe::run_native(
